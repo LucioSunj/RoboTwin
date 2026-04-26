@@ -1,6 +1,7 @@
 import dataclasses
 import functools
 import logging
+import os
 import platform
 from typing import Any
 
@@ -69,12 +70,13 @@ def init_wandb(
         raise FileNotFoundError(f"Checkpoint directory {ckpt_dir} does not exist.")
     if resuming:
         run_id = (ckpt_dir / "wandb_id.txt").read_text().strip()
-        wandb.init(id=run_id, resume="must", project=config.project_name)
+        wandb.init(id=run_id, resume="must", project=config.project_name, mode=os.getenv("WANDB_MODE", "offline"))
     else:
         wandb.init(
             name=config.exp_name,
             config=dataclasses.asdict(config),
             project=config.project_name,
+            mode=os.getenv("WANDB_MODE", "offline"),
         )
         (ckpt_dir / "wandb_id.txt").write_text(wandb.run.id)
 
@@ -225,7 +227,8 @@ def main(config: _config.TrainConfig):
         raise ValueError(
             f"Batch size {config.batch_size} must be divisible by the number of devices {jax.device_count()}.")
 
-    jax.config.update("jax_compilation_cache_dir", str(epath.Path("~/.cache/jax").expanduser()))
+    jax_cache_dir = os.getenv("JAX_COMPILATION_CACHE_DIR") or str(epath.Path(os.getenv("XDG_CACHE_HOME", "~/.cache")) / "jax")
+    jax.config.update("jax_compilation_cache_dir", str(epath.Path(jax_cache_dir).expanduser()))
 
     rng = jax.random.key(config.seed)
     train_rng, init_rng = jax.random.split(rng)

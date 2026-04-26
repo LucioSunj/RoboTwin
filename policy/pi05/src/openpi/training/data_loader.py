@@ -226,6 +226,7 @@ def create_data_loader(
     sharding: jax.sharding.Sharding | None = None,
     shuffle: bool = False,
     num_batches: int | None = None,
+    num_workers: int | None = None,
     skip_norm_stats: bool = False,
     framework: Literal["jax", "pytorch"] = "jax",
 ) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
@@ -236,6 +237,7 @@ def create_data_loader(
         sharding: The sharding to use for the data loader (JAX only).
         shuffle: Whether to shuffle the data.
         num_batches: Determines the number of batches to return.
+        num_workers: The number of worker processes to use. If not provided, uses the train config.
         skip_norm_stats: Whether to skip data normalization.
         framework: The framework to use ("jax" or "pytorch").
     """
@@ -261,7 +263,7 @@ def create_data_loader(
         sharding=sharding,
         shuffle=shuffle,
         num_batches=num_batches,
-        num_workers=config.num_workers,
+        num_workers=config.num_workers if num_workers is None else num_workers,
         seed=config.seed,
         skip_norm_stats=skip_norm_stats,
         framework=framework,

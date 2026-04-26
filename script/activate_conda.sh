@@ -1,0 +1,1 @@
+conda activate /root/autodl-tmp/conda_envs/RoboTwin5090

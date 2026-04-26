@@ -32,6 +32,11 @@ ModelType: TypeAlias = _model.ModelType
 # Work around a tyro issue with using nnx.filterlib.Filter directly.
 Filter: TypeAlias = nnx.filterlib.Filter
 
+# RoboTwin pi05 training artifacts can be large; keep them off the root overlay.
+_ROBOTWIN_PI05_REPO_ID = "stack_three_blocks_clean_repo"
+_ROBOTWIN_PI05_ASSETS_BASE_DIR = "/root/autodl-tmp/robotwin-pi05-assets"
+_ROBOTWIN_PI05_CHECKPOINT_BASE_DIR = "/root/autodl-tmp/robotwin-pi05-checkpoints"
+
 
 @dataclasses.dataclass(frozen=True)
 class AssetsConfig:
@@ -557,7 +562,7 @@ _CONFIGS = [
         name="pi05_aloha_full_base",
         model=pi0_config.Pi0Config(pi05=True),
         data=LeRobotAlohaDataConfig(
-            repo_id="your_repo_id",
+            repo_id=_ROBOTWIN_PI05_REPO_ID,
             adapt_to_pi=False,
             repack_transforms=_transforms.Group(inputs=[
                 _transforms.RepackTransform({
@@ -576,6 +581,8 @@ _CONFIGS = [
             ),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        assets_base_dir=_ROBOTWIN_PI05_ASSETS_BASE_DIR,
+        checkpoint_base_dir=_ROBOTWIN_PI05_CHECKPOINT_BASE_DIR,
         num_train_steps=20_000,
         batch_size=64,
         fsdp_devices=1,  # refer line 359
@@ -585,7 +592,7 @@ _CONFIGS = [
         name="pi05_base_aloha_lora",
         model=pi0_config.Pi0Config(pi05=True, paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotAlohaDataConfig(
-            repo_id="your_repo_id",  # your datasets repo_id
+            repo_id=_ROBOTWIN_PI05_REPO_ID,
             adapt_to_pi=False,
             repack_transforms=_transforms.Group(inputs=[
                 _transforms.RepackTransform({
@@ -603,11 +610,52 @@ _CONFIGS = [
                 prompt_from_task=True,  # Set to True for prompt by task_name
             ),
         ),
-        freeze_filter=pi0_config.Pi0Config(paligemma_variant="gemma_2b_lora",
+        freeze_filter=pi0_config.Pi0Config(pi05=True, paligemma_variant="gemma_2b_lora",
                                     action_expert_variant="gemma_300m_lora").get_freeze_filter(),
         batch_size=32,  # the total batch_size not pre_gpu batch_size
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi05_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        assets_base_dir=_ROBOTWIN_PI05_ASSETS_BASE_DIR,
+        checkpoint_base_dir=_ROBOTWIN_PI05_CHECKPOINT_BASE_DIR,
         num_train_steps=30000,
+        fsdp_devices=1,
+    ),
+    # pi05_base Stack_Three_Blocks by lora
+    TrainConfig(
+        name="pi05_aloha_stack_three_blocks_lora",
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ),
+        data=LeRobotAlohaDataConfig(
+            repo_id=_ROBOTWIN_PI05_REPO_ID,
+            adapt_to_pi=False,
+            repack_transforms=_transforms.Group(inputs=[
+                _transforms.RepackTransform({
+                    "images": {
+                        "cam_high": "observation.images.cam_high",
+                        "cam_left_wrist": "observation.images.cam_left_wrist",
+                        "cam_right_wrist": "observation.images.cam_right_wrist",
+                    },
+                    "state": "observation.state",
+                    "actions": "action",
+                    "prompt": "prompt",
+                })
+            ]),
+            base_config=DataConfig(
+                prompt_from_task=True,
+            ),
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        batch_size=32,
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        assets_base_dir=_ROBOTWIN_PI05_ASSETS_BASE_DIR,
+        checkpoint_base_dir=_ROBOTWIN_PI05_CHECKPOINT_BASE_DIR,
+        num_train_steps=30_000,
         fsdp_devices=1,
     ),
     # pi0_base by lora

@@ -250,12 +250,22 @@ def wrap_ddp(module: nn.Module, device_id: int, find_unused: bool = False) -> nn
         return DDP(
             module,
             device_ids=[device_id],
+            broadcast_buffers=False,
             find_unused_parameters=find_unused,
             gradient_as_bucket_view=True,
+            init_sync=False,
         )
     else:
         print("[INFO] Distributed training not initialized. Skipping DDP wrapping.")
         return IdentityWrapper(module)
+
+
+def distributed_barrier() -> None:
+    """Synchronize ranks using the CUDA device already bound to this process."""
+    if torch.cuda.is_available() and dist.get_backend() == "nccl":
+        dist.barrier(device_ids=[torch.cuda.current_device()])
+    else:
+        dist.barrier()
 
 
 def count_parameters(module: nn.Module, name: str) -> None:
@@ -805,7 +815,7 @@ def save_training_checkpoint(
         print(f"Saving Model Checkpoint for Step {log_step}")
 
     if distributed_state.num_processes > 1:
-        dist.barrier()
+        distributed_barrier()
 
     if distributed_state.is_main_process:
         # Save processor and LoRA adapter
@@ -847,7 +857,7 @@ def save_training_checkpoint(
             )
 
     if distributed_state.num_processes > 1:
-        dist.barrier()
+        distributed_barrier()
 
     if cfg.use_lora and cfg.merge_lora_during_training:
         base_vla = AutoModelForVision2Seq.from_pretrained(
@@ -864,7 +874,7 @@ def save_training_checkpoint(
             print(f"Saved merged model for Step {log_step} at: {checkpoint_dir}")
 
         if distributed_state.num_processes > 1:
-            dist.barrier()
+            distributed_barrier()
 
 
 def run_validation(
@@ -993,6 +1003,13 @@ def finetune(cfg: FinetuneConfig) -> None:
     os.makedirs(run_dir, exist_ok=True)
 
     # GPU setup
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    if torch.cuda.is_available():
+        torch.cuda.set_device(local_rank)
+    if int(os.environ.get("WORLD_SIZE", "1")) > 1 and not dist.is_initialized():
+        dist.init_process_group(
+            backend=os.environ.get("TORCH_DISTRIBUTED_BACKEND", "nccl")
+        )
     distributed_state = PartialState()
     device_id = distributed_state.local_process_index
     torch.cuda.set_device(device_id)
@@ -1041,7 +1058,7 @@ def finetune(cfg: FinetuneConfig) -> None:
 
     # Wait for model files to be synced
     if distributed_state.num_processes > 1:
-        dist.barrier()
+        distributed_barrier()
 
     # Load processor and VLA
     if cfg.resume:
