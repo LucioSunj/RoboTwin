@@ -123,6 +123,7 @@ def main(usr_args):
 
     save_dir = Path(f"eval_result/{task_name}/{policy_name}/{task_config}/{ckpt_setting}/{current_time}")
     save_dir.mkdir(parents=True, exist_ok=True)
+    args["eval_obs_save_dir"] = save_dir
 
     if args["eval_video_log"]:
         video_save_dir = save_dir
@@ -254,6 +255,7 @@ def eval_policy(task_name,
         args["render_freq"] = render_freq
 
         TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)
+        TASK_ENV.eval_obs_save_dir = args.get("eval_obs_save_dir")
         episode_info_list = [episode_info["info"]]
         results = generate_episode_descriptions(args["task_name"], episode_info_list, test_num)
         instruction = np.random.choice(results[0][instruction_type])

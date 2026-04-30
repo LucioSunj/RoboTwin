@@ -37,3 +37,27 @@ echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
 echo "run_mode=$run_mode"
 XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.7}" \
     uv run --frozen scripts/train.py "$train_config_name" --exp-name="$model_name" "$run_flag"
+
+# ```bash
+cd /root/RoboTwin/policy/pi05
+source /root/RoboTwin/policy/pi05/.venv/bin/activate
+
+export CUDA_VISIBLE_DEVICES=0
+export ROBOTWIN_PI05_HOME="/root/autodl-tmp"
+export XDG_CACHE_HOME="/root/autodl-tmp/cache"
+export UV_CACHE_DIR="/root/autodl-tmp/uv-cache"
+export OPENPI_DATA_HOME="/root/autodl-tmp/cache/openpi"
+export JAX_COMPILATION_CACHE_DIR="/root/autodl-tmp/cache/jax"
+export WANDB_MODE="offline"
+export WANDB_DIR="/root/autodl-tmp/wandb"
+export WANDB_CACHE_DIR="/root/autodl-tmp/wandb/cache"
+export WANDB_CONFIG_DIR="/root/autodl-tmp/wandb/config"
+export PATH="/usr/local/cuda-12.8/bin:/root/autodl-tmp/ffmpeg-7.1-build/bin:$PATH"
+export LD_LIBRARY_PATH="/root/autodl-tmp/ffmpeg-7.1-build/lib:${LD_LIBRARY_PATH:-}"
+export XLA_FLAGS="${XLA_FLAGS:-} --xla_gpu_enable_triton_gemm=false"
+export XLA_PYTHON_CLIENT_MEM_FRACTION=0.95
+
+python -u scripts/train.py pi05_aloha_stack_three_blocks_full \
+--exp-name=pi05_aloha_stack_three_blocks_full_baseparams \
+--resume
+# ```
