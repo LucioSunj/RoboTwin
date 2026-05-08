@@ -274,6 +274,21 @@ except Exception as e:
     print('[planner.py]: Something wrong happened when importing CuroboPlanner! Please check if Curobo is installed correctly. If the problem still exists, you can install Curobo from https://github.com/NVlabs/curobo manually.')
     print('Exception traceback:')
     traceback.print_exc()
+    _CUROBO_IMPORT_ERROR = e
+
+    class CuroboPlanner:
+        """Fallback planner stub used when Curobo is unavailable."""
+
+        def __init__(self, *args, **kwargs):
+            self.unavailable_reason = _CUROBO_IMPORT_ERROR
+
+        def update_point_cloud(self, *args, **kwargs):
+            return None
+
+        def plan_path(self, *args, **kwargs):
+            raise RuntimeError(
+                "CuroboPlanner is unavailable; use qpos replay or an mplib path."
+            ) from self.unavailable_reason
 
 
 # ********************** MplibPlanner **********************

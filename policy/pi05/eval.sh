@@ -41,3 +41,44 @@ python script/eval_policy.py --config policy/$policy_name/deploy_policy.yml \
     --clear_cache_freq 1 \
     --seed ${seed} \
     --policy_name ${policy_name} 
+
+# ROBOTWIN=/home/lsk/long-horizon-manipulation/Long-horizon-manipulation-decision-vla/submodules/RoboTwin
+# CKPT=/home/lsk/long-horizon-manipulation/checkpoints/pi05/robotwin/stack_block_three/19000
+
+# cd "$ROBOTWIN"
+
+# mkdir -p \
+# policy/pi05/checkpoints/pi05_aloha_stack_three_blocks_full/stack_three_blocks_full \
+# policy/pi05/assets/pi05_aloha_stack_three_blocks_full \
+# /home/lsk/long-horizon-manipulation/.cache/openpi \
+# /home/lsk/long-horizon-manipulation/.cache/jax
+
+# ln -sfnT "$CKPT" \
+# policy/pi05/checkpoints/pi05_aloha_stack_three_blocks_full/stack_three_blocks_full/19000
+
+# ln -sfnT "$CKPT/assets/stack_three_blocks_clean_repo" \
+# policy/pi05/assets/pi05_aloha_stack_three_blocks_full/stack_three_blocks_clean_repo
+
+# policy/pi05/.venv/bin/python script/update_embodiment_config_path.py
+
+# CUDA_VISIBLE_DEVICES=0 \
+# XLA_PYTHON_CLIENT_MEM_FRACTION=0.4 \
+# XDG_CACHE_HOME=/home/lsk/long-horizon-manipulation/.cache \
+# OPENPI_DATA_HOME=/home/lsk/long-horizon-manipulation/.cache/openpi \
+# JAX_COMPILATION_CACHE_DIR=/home/lsk/long-horizon-manipulation/.cache/jax \
+# ROBOTWIN_PI05_ASSETS_BASE_DIR="$ROBOTWIN/policy/pi05/assets" \
+# ROBOTWIN_PI05_CHECKPOINT_BASE_DIR="$ROBOTWIN/policy/pi05/checkpoints" \
+# XLA_FLAGS="--xla_gpu_enable_triton_gemm=false" \
+# PYTHONWARNINGS=ignore::UserWarning \
+# policy/pi05/.venv/bin/python script/eval_policy.py \
+# --config policy/pi05/deploy_policy.yml \
+# --overrides \
+# --task_name stack_blocks_three \
+# --task_config demo_clean \
+# --train_config_name pi05_aloha_stack_three_blocks_full \
+# --model_name stack_three_blocks_full \
+# --ckpt_setting stack_three_blocks_full \
+# --checkpoint_id 19000 \
+# --clear_cache_freq 1 \
+# --seed 0 \
+# --policy_name pi05
