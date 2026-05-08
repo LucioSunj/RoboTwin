@@ -5,6 +5,7 @@ from collections.abc import Sequence
 import dataclasses
 import difflib
 import logging
+import os
 import pathlib
 from typing import Any, Literal, Protocol, TypeAlias
 
@@ -34,8 +35,12 @@ Filter: TypeAlias = nnx.filterlib.Filter
 
 # RoboTwin pi05 training artifacts can be large; keep them off the root overlay.
 _ROBOTWIN_PI05_REPO_ID = "stack_three_blocks_clean_repo"
-_ROBOTWIN_PI05_ASSETS_BASE_DIR = "/root/autodl-tmp/robotwin-pi05-assets"
-_ROBOTWIN_PI05_CHECKPOINT_BASE_DIR = "/root/autodl-tmp/robotwin-pi05-checkpoints"
+_ROBOTWIN_PI05_ASSETS_BASE_DIR = os.environ.get(
+    "ROBOTWIN_PI05_ASSETS_BASE_DIR", "/root/autodl-tmp/robotwin-pi05-assets"
+)
+_ROBOTWIN_PI05_CHECKPOINT_BASE_DIR = os.environ.get(
+    "ROBOTWIN_PI05_CHECKPOINT_BASE_DIR", "/root/autodl-tmp/robotwin-pi05-checkpoints"
+)
 
 
 @dataclasses.dataclass(frozen=True)
