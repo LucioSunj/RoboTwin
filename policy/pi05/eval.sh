@@ -12,7 +12,7 @@ export JAX_COMPILATION_CACHE_DIR="/root/autodl-tmp/cache/jax"
 export PATH="/usr/local/cuda-12.8/bin:$PATH"
 export LD_LIBRARY_PATH="/root/autodl-tmp/ffmpeg-7.1-build/lib:${LD_LIBRARY_PATH:-}"
 export XLA_FLAGS="${XLA_FLAGS:-} --xla_gpu_enable_triton_gemm=false"
-export ROBOTWIN_RT_DENOISER="${ROBOTWIN_RT_DENOISER:-none}"
+export ROBOTWIN_RT_DENOISER="${ROBOTWIN_RT_DENOISER:-oidn}"
 
 policy_name=pi05
 task_name=${1:?Usage: bash eval.sh <task_name> <task_config> <train_config_name> <model_name> <seed> <gpu_id> [checkpoint_id]}

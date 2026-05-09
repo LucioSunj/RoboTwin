@@ -249,15 +249,28 @@ class SubtaskSuccessChecker:
         self.task = task
         self.segment = segment
 
-    def success(self) -> bool:
-        subtask_id = self.segment.subtask_id
-        both_grippers_open_half = (
+    def both_grippers_open_half(self) -> bool:
+        return bool(
             self.task.is_left_gripper_open_half()
             and self.task.is_right_gripper_open_half()
         )
-        if not both_grippers_open_half:
-            return False
 
+    def active_gripper_open_half(self) -> bool:
+        if self.segment.arm == "left":
+            return bool(self.task.is_left_gripper_open_half())
+        if self.segment.arm == "right":
+            return bool(self.task.is_right_gripper_open_half())
+        return False
+
+    def inactive_gripper_open_half(self) -> bool:
+        if self.segment.arm == "left":
+            return bool(self.task.is_right_gripper_open_half())
+        if self.segment.arm == "right":
+            return bool(self.task.is_left_gripper_open_half())
+        return False
+
+    def placement_success(self) -> bool:
+        subtask_id = self.segment.subtask_id
         if subtask_id == 0:
             target = self.target_for_subtask0()
             err = np.abs(self.task.block1.get_pose().p - target)
@@ -282,6 +295,9 @@ class SubtaskSuccessChecker:
                 )
             )
         raise ValueError(f"Unsupported subtask_id={subtask_id}")
+
+    def success(self) -> bool:
+        return bool(self.both_grippers_open_half() and self.placement_success())
 
     def target_for_current_subtask(self) -> np.ndarray:
         if self.segment.subtask_id == 0:
@@ -319,6 +335,11 @@ class SubtaskSuccessChecker:
             "right_gripper_open_half": bool(self.task.is_right_gripper_open_half()),
             "left_gripper_open_strict": bool(self.task.is_left_gripper_open()),
             "right_gripper_open_strict": bool(self.task.is_right_gripper_open()),
+            "active_gripper_open_half": self.active_gripper_open_half(),
+            "inactive_gripper_open_half": self.inactive_gripper_open_half(),
+            "both_grippers_open_half": self.both_grippers_open_half(),
+            "placement_success": self.placement_success(),
+            "strict_success": self.success(),
             "full_task_success_strict": bool(self.task.check_success()),
         }
 
@@ -409,34 +430,123 @@ def run_expert_subtask(task, expert_vectors: np.ndarray, segment: SubtaskSegment
     return checker.success()
 
 
+SUMMARY_METRICS = (
+    "strict_success",
+    "placement_success",
+    "active_gripper_open_half",
+    "both_grippers_open_half",
+)
+
+
+def placement_success_from_record(record: dict[str, Any]) -> bool:
+    subtask_id = int(record["subtask_id"])
+    block1 = np.asarray(record["block1_pose"], dtype=np.float64)
+    block2 = np.asarray(record["block2_pose"], dtype=np.float64)
+    block3 = np.asarray(record["block3_pose"], dtype=np.float64)
+
+    if subtask_id == 0:
+        target = np.asarray(record["target_pose"], dtype=np.float64)
+        return bool(np.all(np.abs(block1 - target) < np.array([0.04, 0.04, 0.03])))
+    if subtask_id == 1:
+        target = np.asarray(record["target_pose"], dtype=np.float64)
+        return bool(np.all(np.abs(block2 - target) < np.array([0.035, 0.035, 0.025])))
+    if subtask_id == 2:
+        eps = np.array([0.025, 0.025, 0.012])
+        return bool(
+            np.all(np.abs(block2 - np.array([block1[0], block1[1], block1[2] + 0.05])) < eps)
+            and np.all(np.abs(block3 - np.array([block2[0], block2[1], block2[2] + 0.05])) < eps)
+        )
+    raise ValueError(f"Unsupported subtask_id={subtask_id}")
+
+
+def active_gripper_open_half_from_record(record: dict[str, Any]) -> bool:
+    if "active_gripper_open_half" in record:
+        return bool(record["active_gripper_open_half"])
+    if record.get("subtask_arm") == "left":
+        return bool(record.get("left_gripper_open_half", False))
+    if record.get("subtask_arm") == "right":
+        return bool(record.get("right_gripper_open_half", False))
+    return False
+
+
+def both_grippers_open_half_from_record(record: dict[str, Any]) -> bool:
+    if "both_grippers_open_half" in record:
+        return bool(record["both_grippers_open_half"])
+    return bool(record.get("left_gripper_open_half", False) and record.get("right_gripper_open_half", False))
+
+
+def metric_value(record: dict[str, Any], metric: str) -> bool:
+    if metric == "strict_success":
+        return bool(record.get("strict_success", record.get("success", False)))
+    if metric == "placement_success":
+        if "placement_success" in record:
+            return bool(record["placement_success"])
+        return placement_success_from_record(record)
+    if metric == "active_gripper_open_half":
+        return active_gripper_open_half_from_record(record)
+    if metric == "both_grippers_open_half":
+        return both_grippers_open_half_from_record(record)
+    raise ValueError(f"Unsupported summary metric {metric!r}")
+
+
+def summarize_metric(records: list[dict[str, Any]], metric: str) -> dict[str, Any]:
+    count = sum(metric_value(record, metric) for record in records)
+    return {
+        "success": count,
+        "total": len(records),
+        "success_rate": count / len(records) if records else 0.0,
+    }
+
+
 def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
     summary: dict[str, Any] = {"total": len(records)}
+    summary["metrics"] = {
+        metric: summarize_metric(records, metric)
+        for metric in SUMMARY_METRICS
+    }
     by_subtask: dict[str, Any] = {}
     for subtask_id in sorted({int(r["subtask_id"]) for r in records}):
         rows = [r for r in records if int(r["subtask_id"]) == subtask_id]
-        successes = sum(bool(r["success"]) for r in rows)
+        strict_metric = summarize_metric(rows, "strict_success")
         by_subtask[str(subtask_id)] = {
             "subtask_name": rows[0]["subtask_name"],
-            "success": successes,
+            "success": strict_metric["success"],
             "total": len(rows),
-            "success_rate": successes / len(rows) if rows else 0.0,
+            "success_rate": strict_metric["success_rate"],
+            "metrics": {
+                metric: summarize_metric(rows, metric)
+                for metric in SUMMARY_METRICS
+            },
             "avg_elapsed_steps": float(np.mean([r["elapsed_steps"] for r in rows])) if rows else math.nan,
             "avg_target_l2": float(np.mean([r["target_l2"] for r in rows])) if rows else math.nan,
         }
-    successes = sum(bool(r["success"]) for r in records)
-    summary["success"] = successes
-    summary["success_rate"] = successes / len(records) if records else 0.0
+    strict_metric = summary["metrics"]["strict_success"]
+    summary["success"] = strict_metric["success"]
+    summary["success_rate"] = strict_metric["success_rate"]
     summary["by_subtask"] = by_subtask
     return summary
 
 
 def print_summary(summary: dict[str, Any]):
     print("\nSubtask evaluation summary")
-    print(f"overall: {summary['success']}/{summary['total']} = {summary['success_rate'] * 100:.1f}%")
+    for metric in SUMMARY_METRICS:
+        row = summary["metrics"][metric]
+        print(
+            f"overall {metric}: "
+            f"{row['success']}/{row['total']} = {row['success_rate'] * 100:.1f}%"
+        )
     for subtask_id, row in summary["by_subtask"].items():
+        metrics = row["metrics"]
         print(
             f"subtask {subtask_id} ({row['subtask_name']}): "
-            f"{row['success']}/{row['total']} = {row['success_rate'] * 100:.1f}% "
+            f"strict={metrics['strict_success']['success']}/{row['total']} "
+            f"({metrics['strict_success']['success_rate'] * 100:.1f}%) "
+            f"| placement={metrics['placement_success']['success']}/{row['total']} "
+            f"({metrics['placement_success']['success_rate'] * 100:.1f}%) "
+            f"| active_gripper_half={metrics['active_gripper_open_half']['success']}/{row['total']} "
+            f"({metrics['active_gripper_open_half']['success_rate'] * 100:.1f}%) "
+            f"| both_grippers_half={metrics['both_grippers_open_half']['success']}/{row['total']} "
+            f"({metrics['both_grippers_open_half']['success_rate'] * 100:.1f}%) "
             f"| avg_steps={row['avg_elapsed_steps']:.1f} "
             f"| avg_target_l2={row['avg_target_l2']:.4f}"
         )
