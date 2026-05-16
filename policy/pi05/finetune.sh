@@ -5,6 +5,11 @@ train_config_name=${1:?Usage: bash finetune.sh <train_config_name> <model_name> 
 model_name=${2:?Usage: bash finetune.sh <train_config_name> <model_name> <gpu_use> [resume|overwrite]}
 gpu_use=${3:?Usage: bash finetune.sh <train_config_name> <model_name> <gpu_use> [resume|overwrite]}
 run_mode=${4:-resume}
+extra_train_args=()
+
+if [[ -n "${ROBOTWIN_PI05_BATCH_SIZE:-}" ]]; then
+    extra_train_args+=(--batch-size "$ROBOTWIN_PI05_BATCH_SIZE")
+fi
 
 case "$run_mode" in
     resume)
@@ -35,8 +40,13 @@ export LD_LIBRARY_PATH="/root/autodl-tmp/ffmpeg-7.1-build/lib:${LD_LIBRARY_PATH:
 export XLA_FLAGS="${XLA_FLAGS:-} --xla_gpu_enable_triton_gemm=false"
 echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
 echo "run_mode=$run_mode"
-XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.7}" \
-    uv run --frozen scripts/train.py "$train_config_name" --exp-name="$model_name" "$run_flag"
+if [[ ${#extra_train_args[@]} -gt 0 ]]; then
+    echo "extra_train_args=${extra_train_args[*]}"
+fi
+XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.95}" \
+    uv run --frozen scripts/train.py "$train_config_name" --exp-name="$model_name" "$run_flag" "${extra_train_args[@]}"
+
+exit 0
 
 # ```bash
 cd /root/RoboTwin/policy/pi05
